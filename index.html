@@ -105,24 +105,44 @@
                 window.vapiEventListenersAdded = true;
 
                 try {
-                    // Initialize the Vapi instance
+                    // Initialize vapiInstance using the Vapi SDK
                     vapiInstance = window.vapiSDK.run({
                         apiKey: apiKey, // Use the decoded API key
-                        assistant: assistant, // Use the assistant ID
-                        config: buttonConfig, // Optional button styling
+                        assistant: assistant, // Mandatory
+                        config: buttonConfig, // Optional
                     });
 
-                    // Start the call with the assistant ID
-                    vapiInstance.start(assistant);
-
-                    // Listen for assistant responses
-                    vapiInstance.on('message', (message) => {
-                        console.log('Assistant response:', message);
+                    // Event listeners for status updates
+                    vapiInstance.on('call-start', () => {
+                        sendStatusToParent('call-started', { timestamp: new Date().toISOString() });
                     });
 
-                    // Listen for error events
+                    vapiInstance.on('call-end', () => {
+                        sendStatusToParent('call-ended', { timestamp: new Date().toISOString() });
+                    });
+
+                    vapiInstance.on('speech-start', () => {
+                        sendStatusToParent('assistant-talking', { timestamp: new Date().toISOString() });
+                    });
+
+                    vapiInstance.on('speech-end', () => {
+                        sendStatusToParent('assistant-waiting', { timestamp: new Date().toISOString() });
+                    });
+
                     vapiInstance.on('error', (e) => {
-                        console.error('Error from assistant:', e);
+                        window.parent.postMessage({
+                            type: 'error',
+                            data: e.message || e
+                        }, parentOrigin);
+                    });
+
+                    // Transcription message listener
+                    vapiInstance.on('message', (message) => {
+                        if (message.type === 'transcript' && message.transcriptType === 'final') {
+                            let transcription = message.transcript;
+                            let role = message.role; // 'user' or 'assistant'
+                            sendTranscriptionToParent(transcription, role);
+                        }
                     });
 
                     // Event listener for messages from the parent window (Bubble app)
@@ -138,7 +158,11 @@
 
                         var data = event.data;
                         if (typeof data === 'object' && data !== null) {
-                            if (data.type === 'add-message') {
+                            if (data.type === 'start_conversation') {
+                                simulateButtonClick('start');
+                            } else if (data.type === 'stop_conversation') {
+                                simulateButtonClick('stop');
+                            } else if (data.type === 'add-message') {
                                 // Send background message to Vapi using the `.send()` method
                                 if (vapiInstance) {
                                     vapiInstance.send({
@@ -156,22 +180,20 @@
                         }
                     });
 
-                    // Event listeners for status updates (call start, end, etc.)
-                    vapiInstance.on('call-start', () => {
-                        sendStatusToParent('call-started', { timestamp: new Date().toISOString() });
-                    });
-
-                    vapiInstance.on('call-end', () => {
-                        sendStatusToParent('call-ended', { timestamp: new Date().toISOString() });
-                    });
-
-                    vapiInstance.on('speech-start', () => {
-                        sendStatusToParent('assistant-talking', { timestamp: new Date().toISOString() });
-                    });
-
-                    vapiInstance.on('speech-end', () => {
-                        sendStatusToParent('assistant-waiting', { timestamp: new Date().toISOString() });
-                    });
+                    // Function to simulate a click on the assistant button
+                    function simulateButtonClick(action) {
+                        var assistantButton = document.querySelector('button[class*="vapi-btn"]');
+                        if (assistantButton) {
+                            if (action === 'start') {
+                                sendStatusToParent('call-loading', { timestamp: new Date().toISOString() });
+                            }
+                            assistantButton.click();
+                        } else {
+                            setTimeout(function() {
+                                simulateButtonClick(action);
+                            }, 500);
+                        }
+                    }
 
                     // Send an immediate heartbeat upon initialization
                     sendHeartbeat();
