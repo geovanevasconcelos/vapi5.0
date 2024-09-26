@@ -7,6 +7,8 @@
     <script src="https://cdn.jsdelivr.net/gh/VapiAI/html-script-tag@latest/dist/assets/index.js"></script>
 </head>
 <body>
+    <button id="startAssistant">Start AI Assistant</button> <!-- Button for user interaction -->
+
     <script>
         (function() {
             var vapiInstance = null;
@@ -97,8 +99,8 @@
                 window.parent.postMessage(heartbeatMessage, parentOrigin);
             }
 
-            // Initialize the assistant when the SDK is loaded
-            window.addEventListener('load', function() {
+            // Event listener for user interaction to start the assistant
+            document.getElementById('startAssistant').addEventListener('click', function() {
                 if (window.vapiEventListenersAdded) {
                     return;
                 }
