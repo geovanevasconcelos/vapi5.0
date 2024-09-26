@@ -2,126 +2,199 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vapi AI Assistant</title>
-    <!-- Include the Vapi Web SDK -->
+    <!-- Include the Vapi SDK -->
     <script src="https://cdn.jsdelivr.net/gh/VapiAI/html-script-tag@latest/dist/assets/index.js"></script>
 </head>
 <body>
     <script>
-        // Initialize Vapi instance
-        let vapiInstance = null;
+        (function() {
+            var vapiInstance = null;
 
-        // Utility function to get query parameters
-        function getQueryParam(param) {
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get(param);
-        }
-
-        // Utility function to decode Base64 strings
-        function base64Decode(str) {
-            try {
-                return atob(str); // Decode the Base64 string
-            } catch (e) {
-                console.error("Error decoding Base64 string:", e);
-                return str; // Return original string if decoding fails
-            }
-        }
-
-        // Retrieve and decode parameters from the query string
-        const encodedApiKey = getQueryParam('apiKey');
-        const apiKey = base64Decode(encodedApiKey) || '<your_public_api_key>';
-        const assistantId = getQueryParam('assistant') || '<assistant_id>';
-        const title = getQueryParam('title') || 'Have a quick question?';
-        const subtitle = getQueryParam('subtitle') || 'Talk with our AI assistant';
-
-        // Define the configuration for the assistant
-        const assistantConfig = {
-            transcriber: {
-                provider: "deepgram",
-                model: "nova-2",
-                language: "en-US",
-            },
-            model: {
-                provider: "openai",
-                model: "gpt-3.5-turbo",
-                messages: [
-                    {
-                        role: "system",
-                        content: "You are a helpful assistant.",
-                    },
-                ],
-            },
-            voice: {
-                provider: "playht",
-                voiceId: "jennifer",
-            },
-            name: "My Inline Assistant",
-        };
-
-        // Initialize the assistant when the SDK is loaded
-        window.addEventListener('load', function() {
-            try {
-                // Initialize Vapi SDK
-                vapiInstance = window.vapiSDK.run({
-                    apiKey: apiKey, // Use the decoded API key
-                    assistant: assistantId || assistantConfig, // Either use assistantId or inline config
-                });
-
-                // Add listeners for assistant events (e.g., speech-start, call-end, etc.)
-                vapiInstance.on('speech-start', () => {
-                    console.log("Assistant has started speaking.");
-                });
-
-                vapiInstance.on('speech-end', () => {
-                    console.log("Assistant has stopped speaking.");
-                });
-
-                vapiInstance.on('call-start', () => {
-                    console.log("Call has started.");
-                });
-
-                vapiInstance.on('call-end', () => {
-                    console.log("Call has ended.");
-                });
-
-                vapiInstance.on('error', (e) => {
-                    console.error("An error occurred with the assistant:", e);
-                });
-
-            } catch (error) {
-                console.error("Error initializing Vapi instance:", error);
-            }
-        });
-
-        // Listen for messages from the parent (Bubble app) and handle actions like sending messages
-        window.addEventListener('message', function(event) {
-            const parentOrigin = getQueryParam('parentOrigin') || window.location.origin;
-            
-            if (event.origin !== parentOrigin) {
-                console.warn("Message from unknown origin:", event.origin);
-                return;
+            // Utility function to get query parameters
+            function getQueryParam(param) {
+                let urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get(param);
             }
 
-            const data = event.data;
-
-            if (data && data.type === 'add-message') {
-                // Send the background message to the assistant using the .send() method
-                if (vapiInstance) {
-                    vapiInstance.send({
-                        type: 'add-message',
-                        message: {
-                            role: data.message.role || 'system', // Use provided role or default to 'system'
-                            content: data.message.content || 'No message provided.', // Use provided content
-                        }
-                    });
-                    console.log("Message sent to assistant:", data.message.content);
-                } else {
-                    console.error("Vapi instance not initialized.");
+            // Utility function to decode Base64 strings
+            function base64Decode(str) {
+                try {
+                    return atob(str); // Decode the Base64 string
+                } catch (e) {
+                    console.error("Error decoding Base64 string:", e);
+                    return str; // Return original string if decoding fails
                 }
             }
-        });
 
+            // Retrieve and decode parameters from the query string
+            const encodedApiKey = getQueryParam('apiKey');
+            const apiKey = base64Decode(encodedApiKey) || '<your_public_api_key>';
+            const assistant = getQueryParam('assistant') || '<assistant_id>';
+            const title = getQueryParam('title') || 'Have a quick question?';
+            const subtitle = getQueryParam('subtitle') || 'Talk with our AI assistant';
+            const parentOrigin = getQueryParam('parentOrigin') || window.location.origin;
+
+            // Configure the button appearance and behavior
+            const buttonConfig = {
+                position: "bottom-right",
+                offset: "40px",
+                width: "50px",
+                height: "50px",
+                idle: {
+                    color: rgb(93, 254, 202),
+                    type: "pill",
+                    title: title,
+                    subtitle: subtitle,
+                    icon: https://unpkg.com/lucide-static@0.321.0/icons/phone.svg,
+                },
+                loading: {
+                    color: rgb(93, 124, 202),
+                    type: "pill",
+                    title: "Connecting...",
+                    subtitle: "Please wait",
+                    icon: https://unpkg.com/lucide-static@0.321.0/icons/loader-2.svg,
+                },
+                active: {
+                    color: rgb(255, 0, 0),
+                    type: "pill",
+                    title: "Call is in progress...",
+                    subtitle: "End the call.",
+                    icon: https://unpkg.com/lucide-static@0.321.0/icons/phone-off.svg,
+                },
+            };
+
+            // Function to send structured status updates to the parent
+            function sendStatusToParent(status, details = {}) {
+                const message = {
+                    type: 'status_update',
+                    status: status,
+                    details: details
+                };
+                window.parent.postMessage(message, parentOrigin);
+            }
+
+            // Function to send transcription messages to the parent
+            function sendTranscriptionToParent(transcription, role) {
+                const message = {
+                    type: 'transcription',
+                    data: {
+                        transcription: transcription,
+                        role: role,
+                        timestamp: new Date().toISOString()
+                    }
+                };
+                window.parent.postMessage(message, parentOrigin);
+            }
+
+            // Function to send heartbeat messages to the parent
+            function sendHeartbeat() {
+                const heartbeatMessage = {
+                    type: 'heartbeat',
+                    status: 'active',
+                    timestamp: new Date().toISOString()
+                };
+                window.parent.postMessage(heartbeatMessage, parentOrigin);
+            }
+
+            // Initialize the assistant when the SDK is loaded
+            window.addEventListener('load', function() {
+                if (window.vapiEventListenersAdded) {
+                    return;
+                }
+                window.vapiEventListenersAdded = true;
+
+                try {
+                    // Initialize vapiInstance using the Vapi SDK
+                    vapiInstance = window.vapiSDK.run({
+                        apiKey: apiKey, // Use the decoded API key
+                        assistant: assistant, // Mandatory
+                        config: buttonConfig, // Optional
+                    });
+
+                    // Event listeners for status updates
+                    vapiInstance.on('call-start', () => {
+                        sendStatusToParent('call-started', { timestamp: new Date().toISOString() });
+                    });
+
+                    vapiInstance.on('call-end', () => {
+                        sendStatusToParent('call-ended', { timestamp: new Date().toISOString() });
+                    });
+
+                    vapiInstance.on('speech-start', () => {
+                        sendStatusToParent('assistant-talking', { timestamp: new Date().toISOString() });
+                    });
+
+                    vapiInstance.on('speech-end', () => {
+                        sendStatusToParent('assistant-waiting', { timestamp: new Date().toISOString() });
+                    });
+
+                    vapiInstance.on('error', (e) => {
+                        window.parent.postMessage({
+                            type: 'error',
+                            data: e.message || e
+                        }, parentOrigin);
+                    });
+
+                    // Transcription message listener
+                    vapiInstance.on('message', (message) => {
+                        if (message.type === 'transcript' && message.transcriptType === 'final') {
+                            let transcription = message.transcript;
+                            let role = message.role; // 'user' or 'assistant'
+                            sendTranscriptionToParent(transcription, role);
+                        }
+                    });
+
+                    // Event listener for messages from the parent window
+                    window.addEventListener('message', function(event) {
+                        // Ignore messages from the assistant's own origin
+                        if (event.origin === window.location.origin) {
+                            return;
+                        }
+
+                        if (event.origin !== parentOrigin) {
+                            return;
+                        }
+
+                        var data = event.data;
+                        if (typeof data === 'object' && data !== null) {
+                            if (data.type === 'start_conversation') {
+                                simulateButtonClick('start');
+                            } else if (data.type === 'stop_conversation') {
+                                simulateButtonClick('stop');
+                            }
+                        }
+                    });
+
+                    // Function to simulate a click on the assistant button
+                    function simulateButtonClick(action) {
+                        var assistantButton = document.querySelector('button[class*="vapi-btn"]');
+                        if (assistantButton) {
+                            if (action === 'start') {
+                                sendStatusToParent('call-loading', { timestamp: new Date().toISOString() });
+                            }
+                            assistantButton.click();
+                        } else {
+                            setTimeout(function() {
+                                simulateButtonClick(action);
+                            }, 500);
+                        }
+                    }
+
+                    // Send an immediate heartbeat upon initialization
+                    sendHeartbeat();
+
+                    // Send heartbeat every 30 seconds
+                    setInterval(sendHeartbeat, 30000);
+
+                } catch (error) {
+                    window.parent.postMessage({
+                        type: 'error',
+                        data: error.message || error
+                    }, parentOrigin);
+                }
+            });
+        })();
     </script>
 </body>
 </html>
