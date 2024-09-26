@@ -162,6 +162,20 @@
                                 simulateButtonClick('start');
                             } else if (data.type === 'stop_conversation') {
                                 simulateButtonClick('stop');
+                            } else if (data.type === 'add-message') {
+                                // Send background message to Vapi using the `.send()` method
+                                if (vapiInstance) {
+                                    vapiInstance.send({
+                                        type: 'add-message',
+                                        message: {
+                                            role: data.message.role || 'system',
+                                            content: data.message.content || 'Default message content'
+                                        }
+                                    });
+                                    console.log("Background message sent to assistant:", data.message.content);
+                                } else {
+                                    console.error("Vapi instance not initialized.");
+                                }
                             }
                         }
                     });
